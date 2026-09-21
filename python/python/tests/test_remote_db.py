@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import contextlib
 from datetime import timedelta
 import http.server
+import inspect
 import json
 import multiprocessing as mp
 import pickle
@@ -522,6 +523,31 @@ def test_remote_permutation_is_picklable():
             {"a": 0},
             {"a": 4},
         ]
+
+
+def test_create_table_positional_parameters_match_base_contract():
+    # A positional call must bind to the same parameters on every connection,
+    # otherwise `db.create_table(name, data, schema, "overwrite", True)` silently
+    # means something else against LanceDB Cloud.
+    from lancedb.db import DBConnection, LanceDBConnection
+    from lancedb.namespace import LanceNamespaceDBConnection
+    from lancedb.remote.db import RemoteDBConnection
+
+    data = [{"id": 1}]
+    bound = [
+        tuple(
+            inspect.signature(cls.create_table)
+            .bind(None, "test", data, None, "overwrite", True)
+            .arguments
+        )
+        for cls in (
+            DBConnection,
+            LanceDBConnection,
+            LanceNamespaceDBConnection,
+            RemoteDBConnection,
+        )
+    ]
+    assert bound == [("self", "name", "data", "schema", "mode", "exist_ok")] * 4
 
 
 def test_create_table_exist_ok():
